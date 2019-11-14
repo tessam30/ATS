@@ -60,3 +60,61 @@ ggsave(file.path(graphpath, "ATS_class_size_2019.pdf"),
        width = 11,
        useDingbats = FALSE)  
   
+
+# SOL school by subject ---------------------------------------------------
+
+excel_sheets(file.path(datapath, "SOL school-by-subject-2019.xlsx"))
+sol <- read_excel(file.path(datapath, "SOL school-by-subject-2019.xlsx"), sheet = "School by Subject by Subgroup") %>% 
+  # Reshape to get values stacked for plotting
+  gather(pass_rate, string_value, `2016-2017 Pass Rate`:`2018-2019 Pass Rate`) %>% 
+  
+  # Flagging the < values as they blow up class type of value (turn what should be numeric into a character) 
+  mutate(value_flag = ifelse(string_value == "<", 1, 0),
+         value = ifelse(value_flag == 1, NA, as.numeric(string_value))) %>% 
+  
+  # Keep only Arlington county schools and elementary school types
+  filter(`Sch Type` == "Elem" & `Div Name` == "Arlington County") %>% 
+  
+  # split out pass_rate to recover years
+  separate(pass_rate, into = c("year", "type"), sep = " ", extra = "merge") %>% 
+
+  # drop elementary from the school names, takes up too much space in plots
+  mutate(school_name = str_remove(`Sch Name`, " Elementary"),
+         ats_flag = ifelse(school_name == "Arlington Traditional", 1, 0),
+         year_color = case_when(
+           year == "2016-2017" & ats_flag == 0 ~ "#bdbdbd",
+           year == "2017-2018" & ats_flag == 0 ~ "#737373",
+           year == "2018-2019" & ats_flag == 0 ~ "#252525",
+           year == "2016-2017" & ats_flag == 1 ~ "#9ecae1",
+           year == "2017-2018" & ats_flag == 1 ~ "#4292c6",
+           year == "2017-2018" & ats_flag == 1 ~ "#08519c"
+         )) %>% 
+  group_by(school_name, Subgroup, Subject) %>% 
+  mutate(value_sort = mean(value)) %>% 
+  ungroup()
+
+
+# SOL Plots -- what do we want to show? Let's take a look at results by school, by subject
+
+sol %>% 
+  filter(Subject == "English: Reading") %>% 
+  mutate(school_sort = reorder_within(school_name, value_sort, Subgroup)) %>% 
+  ggplot() + 
+  geom_point(aes(x = value, y = school_sort, colour = year_color)) +
+  facet_wrap(~Subgroup, scale = "free_y") +
+  scale_y_reordered() +
+  theme_minimal() +
+  scale_color_identity()
+
+
+
+# State-wide? test results -- to be used for comparison points
+state_test <- read_excel(file.path(datapath, "SOL school-by-subject-2019.xlsx"), sheet = "State by Test") %>% 
+  gather(pass_rate, value, `2016-2017 Pass Rate`:`2018-2019 Adv Pass Rate`) %>% 
+  separate(pass_rate, into = c("year", "type"), sep = " ", extra = "merge")
+
+
+
+
+
+
