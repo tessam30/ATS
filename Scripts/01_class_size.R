@@ -64,6 +64,9 @@ ggsave(file.path(graphpath, "ATS_class_size_2019.pdf"),
 # SOL school by subject ---------------------------------------------------
 
 excel_sheets(file.path(datapath, "SOL school-by-subject-2019.xlsx"))
+
+sol_raw <- read_excel(file.path(datapath, "SOL school-by-subject-2019.xlsx"), sheet = "School by Subject by Subgroup") 
+
 sol <- read_excel(file.path(datapath, "SOL school-by-subject-2019.xlsx"), sheet = "School by Subject by Subgroup") %>% 
   # Reshape to get values stacked for plotting
   gather(pass_rate, string_value, `2016-2017 Pass Rate`:`2018-2019 Pass Rate`) %>% 
@@ -83,30 +86,61 @@ sol <- read_excel(file.path(datapath, "SOL school-by-subject-2019.xlsx"), sheet 
          ats_flag = ifelse(school_name == "Arlington Traditional", 1, 0),
          year_color = case_when(
            year == "2016-2017" & ats_flag == 0 ~ "#bdbdbd",
-           year == "2017-2018" & ats_flag == 0 ~ "#737373",
-           year == "2018-2019" & ats_flag == 0 ~ "#252525",
-           year == "2016-2017" & ats_flag == 1 ~ "#9ecae1",
-           year == "2017-2018" & ats_flag == 1 ~ "#4292c6",
+           year == "2017-2018" & ats_flag == 0 ~ "#969696",
+           year == "2018-2019" & ats_flag == 0 ~ "#737373",
+           year == "2016-2017" & ats_flag == 1 ~ "#4292c6",
+           year == "2017-2018" & ats_flag == 1 ~ "#2171b5",
            year == "2017-2018" & ats_flag == 1 ~ "#08519c"
          )) %>% 
   group_by(school_name, Subgroup, Subject) %>% 
-  mutate(value_sort = mean(value)) %>% 
-  ungroup()
+  mutate(value_sort = mean(value, na.rm = TRUE)) %>% 
+  ungroup() %>% 
+  group_by(Subject) %>% 
+  mutate(school_sort = reorder_within(school_name, value_sort, Subgroup)) %>% 
+  ungroup() 
 
+write_csv(sol, file.path(dataout, "SOL_Arlington_Elementary.csv"))
 
 # SOL Plots -- what do we want to show? Let's take a look at results by school, by subject
+# Create a generic plotting function to use to splay out all the subjects across graphs
 
-sol %>% 
-  filter(Subject == "English: Reading") %>% 
+dotplot <- function(df) {
+df %>% 
+  na.omit() %>% 
   mutate(school_sort = reorder_within(school_name, value_sort, Subgroup)) %>% 
   ggplot() + 
-  geom_point(aes(x = value, y = school_sort, colour = year_color)) +
-  facet_wrap(~Subgroup, scale = "free_y") +
+  geom_point(aes(x = value, y = school_sort, fill = year_color),
+             size = 3, shape = 21, alpha = 0.80, colour = "white") +
+  facet_wrap(~Subgroup, scale = "free_y",
+             labeller = labeller(groupwrap = label_wrap_gen(10))) +
   scale_y_reordered() +
+    labs(x = "", y = "") +
   theme_minimal() +
-  scale_color_identity()
+  scale_fill_identity() + 
+  theme(axis.text = element_text(size = 8),
+        panel.grid.minor = element_blank(),
+        strip.text = element_text(hjust = 0, size = 10))
+}
 
+dotplot(sol)
 
+plots <- 
+  sol %>% 
+  group_by(Subject) %>% 
+  nest() %>% 
+  mutate(plots = map2(data, Subject,
+                      ~dotplot(.) +
+                        labs(title = str_c(Subject, " standards of learning from 2016 - 2018."))))
+
+plots$plots[[1]]
+
+map2(file.path(imagepath, paste0(plots$Subject, ".pdf")),
+     plots$plots,
+     height = 8.5, 
+     width = 11,
+     useDingbats = FALSE,
+     scale = 1.25,
+     ggsave)
 
 # State-wide? test results -- to be used for comparison points
 state_test <- read_excel(file.path(datapath, "SOL school-by-subject-2019.xlsx"), sheet = "State by Test") %>% 
