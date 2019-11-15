@@ -7,7 +7,8 @@
 # Loading data ------------------------------------------------------------
 dir(datapath)
 
-
+ats_color <- "#2171b5"
+non_ats <-  "#bdbdbd"
 
 # Class size analysis -----------------------------------------------------
 class_size <- read_excel(file.path(datapath, "APS Class Size Report 2018-2019_tidy_names.xlsx"), skip = 3)
@@ -47,7 +48,7 @@ class_size_plot <-
   geom_segment(aes(x = min, xend = max, y = school_sort, yend = school_sort),
                colour = "#d9d9d9", size = 1) +
   geom_point(aes(x = ave, y = school_sort, fill = ATS_flag), size = 3, shape = 21, colour = "white") +
-  facet_wrap(~grade_order, scale = "free_y") +
+  facet_wrap(~grade_order, scales = "free_y") +
   scale_y_reordered() +
   theme_minimal() +
   scale_fill_identity() +
@@ -113,17 +114,68 @@ sol_og <-
   group_by(year, Subject, school_name) %>% 
   fill(benchmark, .direction = c("updown")) %>% 
   ungroup() %>% 
-  mutate(op_gap = value - benchmark) 
+  mutate(op_gap = value - benchmark,
+         ) 
+
+
 
 sol_og %>% 
   filter(Subject == "Mathematics" & year == "2018-2019") %>% 
-  mutate(school_sort = reorder_within(school_name, op_gap, Subgroup)) %>% 
+  mutate(school_sort = reorder_within(school_name, -op_gap, Subgroup,),
+         max_dev = max(abs(op_gap))) %>%
   ggplot() +
-  geom_point(aes(x = op_gap, y = school_sort, fill = year),
+  geom_point(aes(x = op_gap, y = school_sort, fill = op_gap),
              size = 3, shape = 21, alpha = 0.80, colour = "white") +
-  facet_wrap(~Subgroup, scale = "free_y",
+  facet_wrap(~Subgroup, scales = "free_y",
              labeller = labeller(groupwrap = label_wrap_gen(10))) +
-  scale_y_reordered()
+  scale_y_reordered() +
+  scale_fill_gradientn(colours = RColorBrewer::brewer.pal(11, 'PiYG'),
+                       limits = c(-1 * max_dev, max_dev))
+
+
+
+opp_plot <- function(df, filtvar, yearvar = NA) {
+  max_dev = unlist(df %>% summarise(max_dev = max(abs(op_gap), na.rm = TRUE)))
+  
+  df %>% 
+    filter(Subject == {{filtvar}} & year == {{yearvar}}) %>% 
+    filter(Subgroup != "White") %>% 
+    mutate(subgroup_order = fct_reorder(Subgroup, op_gap),
+      school_sort = reorder_within(school_name, op_gap, Subgroup)) %>%
+    ggplot() +
+    #geom_rect(aes(xmin = 0, xmax = -75, ymin = -Inf, ymax = Inf), fill = "#dfc27d", alpha = 0.005) +
+    #geom_rect(aes(xmin = 0, xmax = 75, ymin = -Inf, ymax = Inf), fill = "#80cdc1", alpha = 0.005) +
+    geom_segment(aes(x = 0, xend = op_gap, y = school_sort, yend = school_sort), colour = "#969696") +
+                 #arrow = arrow(length = unit(0.30,"cm"), type = "closed")) +
+    geom_point(aes(x = op_gap, y = school_sort, fill = op_gap, group = year),
+               size = 3, shape = 21, colour = "#525252") +
+
+    facet_wrap(~subgroup_order, scales = "free_y",
+               labeller = labeller(groupwrap = label_wrap_gen(10))) +
+    scale_y_reordered() +
+    scale_fill_gradientn(colours = RColorBrewer::brewer.pal(11, 'PiYG'),
+                         limits = c(-1 * max_dev, max_dev)) +
+    theme_minimal() +
+    scale_x_continuous(limits = c(-1 * max_dev, max_dev)) +
+    labs(x = "Opportunity gap", y = "")
+  
+}
+
+opp_plot(sol_og, "English: Reading", "2018-2019")
+opp_plot(sol_og, "History and Social Sciences", "2018-2019")
+opp_plot(sol_og, "History and Social Sciences", "2018-2019")
+
+
+
+
+tmp <- sol_og %>% 
+  mutate(sub_year = str_c(Subject, " ", as.character(year))) %>% 
+  group_by(sub_year) %>% 
+  nest() %>% 
+  mutate(plot = map2(data, sub_year, 
+                     ~opp_plot(.)))
+
+tmp$plot[[2]]
 
 
 
@@ -137,7 +189,7 @@ df %>%
   ggplot() + 
   geom_point(aes(x = value, y = school_sort, fill = year_color),
              size = 3, shape = 21, alpha = 0.80, colour = "white") +
-  facet_wrap(~Subgroup, scale = "free_y",
+  facet_wrap(~Subgroup, scales = "free_y",
              labeller = labeller(groupwrap = label_wrap_gen(10))) +
   scale_y_reordered() +
     labs(x = "", y = "") +
@@ -204,7 +256,7 @@ demog_plot <- function(df, xvar = count) {
     mutate(dem_order = fct_reorder(demographic, {{xvar}}, .desc = TRUE),
            school_order = reorder_within(school, {{xvar}}, demographic)) %>% 
     ggplot(aes(x = school_order, y =  {{xvar}}, fill = ats_flag)) + geom_col() +
-    facet_wrap(~dem_order, scale = "free_y", nrow = 2) + 
+    facet_wrap(~dem_order, scales = "free_y", nrow = 2) + 
     coord_flip() +
     scale_x_reordered() +
     scale_fill_identity() +
@@ -214,7 +266,7 @@ demog_plot <- function(df, xvar = count) {
 }
 
 demog_plot(cr, xvar = share) +
-  scale_y_continuous(label = percent_format(accuracy = 1))
+  scale_y_continuous(labels = percent_format(accuracy = 1))
 
 demog_plot(cr) +
   labs(title = "Civil Rights Statistics by School as of October 31, 2018")
@@ -233,13 +285,62 @@ demog_plot(cr %>% filter(demographic == "White"), xvar = Total) +
        caption = "Civil Rights Statistics by School as of October 31, 2018")
 
 
+# ESL data ----------------------------------------------------------------
 
-# Assesssment statistics time-series --------------------------------------
+esl <- read_csv(file.path(datapath, "esl_table1.csv")) %>% 
+  filter(!is.na(school))
 
-assess <- read_csv(file.path(datapath, "assessment_statistics.csv"))
+esl_totals <- esl %>% filter(str_detect(school, "^Element"))
 
+esl_elem <- esl %>% 
+  filter(!str_detect(school, "^Element")) %>% 
+  gather(metric, value, tse_2018:share_2015) %>% 
+  separate(metric, into = c("type", "year"), sep = "_") %>% 
+  mutate(ats_flag = ifelse(school == "Arlington Traditional", ats_color, "#525252")) %>% 
+  spread(type, value) %>% 
+  mutate(share = nseh/tse) %>% 
+  group_by(year) %>% 
+  mutate_at(c("tse", "nseh"), .funs = funs(tot = sum(., na.rm = TRUE))) %>% 
+  ungroup() %>% 
+  mutate(overall_share = nseh_tot / tse_tot,
+         ave_text = ifelse(school == "Randolph" & year == 2015, "APS average", NA),
+         year = as.integer(year))
 
+# First, let's just look at ATS over time relative to the rest - spaghetti plot
+(esl_plot <- 
+  esl_elem %>% 
+  mutate(school_order = fct_reorder(school, share, .desc = TRUE)) %>% 
+  ggplot() +
+  geom_area(aes(y = overall_share, x = year, group = school), fill = "#f0f0f0") +
+  geom_line(aes(y = overall_share, x = year, group = school), color = "#969696", linetype = "dotted") +
+  geom_line(aes(y = share, x = year, group = school, colour = "#bdbdbd"), size = 1) +
+ geom_point(aes(y = share, x = year, group = school, fill = ats_flag), 
+            shape = 21, size = 4, color = "white", stroke = 2) +
+  geom_text_repel(aes(y = overall_share, x = year, label = ave_text),
+                   nudge_x = 0.5,
+                  nudge_y = 0.05,
+                   na.rm = TRUE, segment.size = 0,
+                  colour = "#969696") +
+  scale_fill_identity() + scale_color_identity() +
+  theme_minimal() + 
+  facet_wrap(~school_order) +
+  scale_y_continuous(limits = c(0, .8),
+                     labels = percent_format(accuracy = 1)) +
+  labs(x = "", y = "",
+       caption = "Source: Fall Statistics, Arlington Public Schools, School Year 2018/2019",
+       title = glue::glue(
+       "ATS ranks 16th out of 25 in the relative share of english learners receiving English for Speakers 
+       of Other Languages (ESOL) or High Intensity Language Training (HILT) training services")
+       ) +
+  theme(strip.text = element_text(hjust = 0, size = 10)) 
+)
 
+ggsave(file.path(imagepath, "ATS_ESL_summary.pdf"),
+       plot = esl_plot,
+       height = 8.5,
+       width = 11,
+       useDingbats = FALSE,
+       scale = 1.25)
 
 
 # GIS data ----------------------------------------------------------------
