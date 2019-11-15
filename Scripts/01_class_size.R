@@ -107,7 +107,10 @@ sol <- read_excel(file.path(datapath, "SOL school-by-subject-2019.xlsx"), sheet 
 
 write_csv(sol, file.path(dataout, "SOL_Arlington_Elementary.csv"))
 
+#
 # Mold SOL data so we can calculate the opportunity gap (compare all subgroups to whites)
+# Opportunity gap plots
+
 sol_og <- 
   sol %>% 
   mutate(benchmark = ifelse(Subgroup == "White", value, NA)) %>% 
@@ -115,55 +118,137 @@ sol_og <-
   fill(benchmark, .direction = c("updown")) %>% 
   ungroup() %>% 
   mutate(op_gap = value - benchmark,
-         ) 
+         ats_flag_color = ifelse(school_name == "Arlington Traditional", ats_color, non_ats)) 
 
 
+# Using this for the fill
+df_poly <- data.frame(
+  x = c(-Inf, Inf, -Inf),
+  y = c(-Inf, Inf, Inf)
+)
+
+
+parity_plot <- function(df, sub_filt = "Mathmatics", yearfilt = "2018-2019") {
+  df %>% 
+    filter(Subject == {{sub_filt}} & year == {{yearfilt}}) %>% 
+    filter(Subgroup != "White") %>% 
+    mutate(school_sort = reorder_within(school_name, -op_gap, Subgroup)) %>% 
+    {# By wrapping ggplot call in brackets we can control where the pipe flow enters (df)
+      # This allows us to use filters within the ggplot call
+      ggplot() +
+        geom_abline(intercept = 0, slope = 1, color = non_ats, linetype = "dotted") +
+        #geom_polygon(data = df_poly, aes(-x, -y), fill="#fde0ef", alpha=0.25) +
+        geom_point(data = dplyr::filter(., school_name != "Arlington Traditional"),
+                   aes(y = value, x = benchmark, fill = ats_flag_color),
+                   size = 4, shape = 21, alpha = 0.75, colour = "white") +
+        geom_point(data = dplyr::filter(., school_name == "Arlington Traditional"),
+                   aes(y = value, x = benchmark, fill = ats_flag_color),
+                   size = 4, shape = 21, alpha = 0.80, colour = "white") +
+        facet_wrap(~Subgroup,
+                   labeller = labeller(groupwrap = label_wrap_gen(10))) +
+        coord_fixed(ratio = 1, xlim = c(40, 100), ylim = c(40, 100)) +
+        scale_fill_identity() +
+        theme_minimal() +
+        labs(x = "benchmark test value", y = "Subgroup test value",
+             title = str_c(sub_filt, " opportunity gap across subgroups (ATS in blue) for ", yearfilt),
+             subtitle = "Each point is a school -- points below the 45 degree line indicate an opportunity gap") +
+        theme(strip.text = element_text(hjust = 0))
+    }
+}
+
+# Creating a list of levels in subjects to loop through in purrr call and then write to pdfs
+sublist <- list(c("Science"), c("English: Reading"), c("Mathematics"), c("History and Social Sciences"))
+
+parity_list <- map(sublist, ~parity_plot(sol_og, sub_filt = .))
+parity_list[[2]] 
+
+map2(sublist, parity_list, ggsave(filename = file.path(imagepath, str_c(.x, ".pdf")), plot = .y))
+
+
+map2(file.path(imagepath, paste0(sublist, " opportunity gap parity plots.pdf")), 
+     parity_list,
+     height = 8.5, 
+     width = 11,
+     dpi = 300, 
+     ggsave)
+
+  
 
 sol_og %>% 
   filter(Subject == "Mathematics" & year == "2018-2019") %>% 
-  mutate(school_sort = reorder_within(school_name, -op_gap, Subgroup,),
-         max_dev = max(abs(op_gap))) %>%
-  ggplot() +
-  geom_point(aes(x = op_gap, y = school_sort, fill = op_gap),
+  filter(Subgroup != "White") %>% 
+  mutate(school_sort = reorder_within(school_name, -op_gap, Subgroup)) %>% 
+  { 
+    ggplot() +
+  geom_abline(intercept = 0, slope = 1, color = non_ats, linetype = "dotted") +
+  geom_point(data = dplyr::filter(., school_name != "Arlington Traditional"),
+    aes(y = value, x = benchmark, fill = ats_flag_color),
              size = 3, shape = 21, alpha = 0.80, colour = "white") +
-  facet_wrap(~Subgroup, scales = "free_y",
+  geom_point(data = dplyr::filter(., school_name == "Arlington Traditional"),
+                 aes(y = value, x = benchmark, fill = ats_flag_color),
+                 size = 3, shape = 21, alpha = 0.80, colour = "white") +
+  facet_wrap(~Subgroup,
              labeller = labeller(groupwrap = label_wrap_gen(10))) +
-  scale_y_reordered() +
-  scale_fill_gradientn(colours = RColorBrewer::brewer.pal(11, 'PiYG'),
-                       limits = c(-1 * max_dev, max_dev))
+  coord_fixed(ratio = 1, xlim = c(40, 100), ylim = c(40, 100)) +
+  scale_fill_identity() +
+  theme_minimal() +
+      labs(x = "benchmark test value", y = "Subgroup test value",
+           title = "Comparison of ATS to all other schools across Subgroups",
+           subtitle = "45 degree line reflects parity with benchmark") +
+      theme(strip.text = element_text(hjust = 0))
+  }
 
 
+ats <- ifelse(sol_og$school_name == "Arlington Traditional", ats_color, "black")
 
-opp_plot <- function(df, filtvar, yearvar = NA) {
+opp_plot <- function(df, filtvar, yearvar = "2018-2019") {
   max_dev = unlist(df %>% summarise(max_dev = max(abs(op_gap), na.rm = TRUE)))
   
   df %>% 
     filter(Subject == {{filtvar}} & year == {{yearvar}}) %>% 
     filter(Subgroup != "White") %>% 
     mutate(subgroup_order = fct_reorder(Subgroup, op_gap),
-      school_sort = reorder_within(school_name, op_gap, Subgroup)) %>%
+      school_sort = reorder_within(school_name, op_gap, Subgroup)) %>% 
+    filter(!is.na(op_gap)) %>% 
     ggplot() +
     #geom_rect(aes(xmin = 0, xmax = -75, ymin = -Inf, ymax = Inf), fill = "#dfc27d", alpha = 0.005) +
     #geom_rect(aes(xmin = 0, xmax = 75, ymin = -Inf, ymax = Inf), fill = "#80cdc1", alpha = 0.005) +
+    # geom_rect(data = dplyr::filter(., school_name == "Arlington Traditional"), 
+    #           aes(xmin = -75, xmax = 75, ymin = school_sort, ymax = school_sort), 
+    #           fill = "black") +
     geom_segment(aes(x = 0, xend = op_gap, y = school_sort, yend = school_sort), colour = "#969696") +
                  #arrow = arrow(length = unit(0.30,"cm"), type = "closed")) +
     geom_point(aes(x = op_gap, y = school_sort, fill = op_gap, group = year),
                size = 3, shape = 21, colour = "#525252") +
 
-    facet_wrap(~subgroup_order, scales = "free_y",
+    facet_wrap(~subgroup_order, scales = "free_y", drop = TRUE, 
                labeller = labeller(groupwrap = label_wrap_gen(10))) +
     scale_y_reordered() +
     scale_fill_gradientn(colours = RColorBrewer::brewer.pal(11, 'PiYG'),
                          limits = c(-1 * max_dev, max_dev)) +
     theme_minimal() +
     scale_x_continuous(limits = c(-1 * max_dev, max_dev)) +
-    labs(x = "Opportunity gap", y = "")
-  
+    labs(x = "Opportunity gap", y = "",
+         title = str_c(filtvar, " opportunity gap for ", yearvar),
+         subtitle = "Lenght of bar indicates severity of gap",
+         caption = "Source: Standards of learning database") +
+    theme(legend.position = "none",
+          strip.text = element_text(hjust = 0))
+
 }
 
-opp_plot(sol_og, "English: Reading", "2018-2019")
-opp_plot(sol_og, "History and Social Sciences", "2018-2019")
-opp_plot(sol_og, "History and Social Sciences", "2018-2019")
+
+# Loop over parity deviation plots and save them to pdfs
+parity_dev <- map(sublist, ~opp_plot(sol_og, filtvar = .))
+parity_dev[[3]]
+
+map2(file.path(imagepath, paste0(sublist, " opportunity gap deviation plots.pdf")), 
+     parity_dev,
+     height = 8.5, 
+     width = 11,
+     dpi = 300, 
+     scale = 1.25,
+     ggsave)
 
 
 
