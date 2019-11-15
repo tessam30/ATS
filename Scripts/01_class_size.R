@@ -7,6 +7,9 @@
 # Loading data ------------------------------------------------------------
 dir(datapath)
 
+
+
+# Class size analysis -----------------------------------------------------
 class_size <- read_excel(file.path(datapath, "APS Class Size Report 2018-2019_tidy_names.xlsx"), skip = 3)
 
 cs_long <- 
@@ -61,6 +64,8 @@ ggsave(file.path(graphpath, "ATS_class_size_2019.pdf"),
        useDingbats = FALSE)  
   
 
+
+
 # SOL school by subject ---------------------------------------------------
 
 excel_sheets(file.path(datapath, "SOL school-by-subject-2019.xlsx"))
@@ -100,6 +105,27 @@ sol <- read_excel(file.path(datapath, "SOL school-by-subject-2019.xlsx"), sheet 
   ungroup() 
 
 write_csv(sol, file.path(dataout, "SOL_Arlington_Elementary.csv"))
+
+# Mold SOL data so we can calculate the opportunity gap (compare all subgroups to whites)
+sol_og <- 
+  sol %>% 
+  mutate(benchmark = ifelse(Subgroup == "White", value, NA)) %>% 
+  group_by(year, Subject, school_name) %>% 
+  fill(benchmark, .direction = c("updown")) %>% 
+  ungroup() %>% 
+  mutate(op_gap = value - benchmark) 
+
+sol_og %>% 
+  filter(Subject == "Mathematics" & year == "2018-2019") %>% 
+  mutate(school_sort = reorder_within(school_name, op_gap, Subgroup)) %>% 
+  ggplot() +
+  geom_point(aes(x = op_gap, y = school_sort, fill = year),
+             size = 3, shape = 21, alpha = 0.80, colour = "white") +
+  facet_wrap(~Subgroup, scale = "free_y",
+             labeller = labeller(groupwrap = label_wrap_gen(10))) +
+  scale_y_reordered()
+
+
 
 # SOL Plots -- what do we want to show? Let's take a look at results by school, by subject
 # Create a generic plotting function to use to splay out all the subjects across graphs
