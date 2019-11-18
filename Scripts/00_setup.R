@@ -3,7 +3,7 @@
 # Date: 2019-11-13
 # Notes: Run prior to other scripts to ensure path shortcuts are set
 
-pacman::p_load("tidyverse", "tidytext", "RColorBrewer", "readxl", "purrr", "sf", "scales", "ggrepel", "glue")
+pacman::p_load("tidyverse", "tidytext", "RColorBrewer", "readxl", "purrr", "sf", "scales", "ggrepel", "glue", "stringr")
 
 # Create folders for project (if they do not exist)
 folder_list <- list("Data", "Images", "Scripts", "Dataout", "GIS", "Documents", "Graphics")
