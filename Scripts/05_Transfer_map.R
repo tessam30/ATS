@@ -67,7 +67,14 @@ ggplot(fac_geo_ats %>% filter(elem_flag == 1)) +
   scale_size(range = c(0, 20)) + theme(legend.position = "none") +
   labs(x = "", y = "",
        title = "Arlington Traditional School transfer numbers",
-       subtitle = "Fourty-three percent (228/525) of transfers are from South Arlington")
+       subtitle = "Fourty-three percent (228/525) of transfers are from South Arlington") 
+
+ggsave(file.path(imagepath, "ATS_transfer_map.pdf"),
+       plot = last_plot(),
+       height = 11.5,
+       width = 8,
+       useDingbats = FALSE,
+       scale = 1.33)
 
   
   
