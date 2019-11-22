@@ -68,26 +68,32 @@ ggplot(fac_geo_ats %>% filter(elem_flag == 1)) +
   scale_color_viridis_c(option = "A", direction = -1) +
   scale_size(range = c(0, 20)) + theme(legend.position = "none") +
   labs(x = "", y = "",
-       title = str_c("Arlington Traditional School ", {{title}}),
-       subtitle = str_c({{subtitle}}, " somthing goes here")) 
+       title = str_c({{title}}),
+       subtitle = str_c({{subtitle}})) 
 
 }  
 
-map_plot(fac_geo_ats, bus_count, title = "bus count summary")
+bus <- map_plot(fac_geo_ats, bus_count, title = "Bus count summary per elementary school",
+         subtitle = "ATS and Key have the largest bus counts")
 
-ggsave(file.path(imagepath, "ATS_transfer_map.pdf"),
-       plot = last_plot(),
+ggsave(file.path(imagepath, "ATS_bus_count_summary.pdf"),
+       plot = bus,
        height = 11.5,
        width = 8,
        useDingbats = FALSE,
        scale = 1.33)
 
-  
-  
-  ggplot(nc_centers) +
-  annotation_map_tile(zoom = 7) +
-  geom_sf(aes(color = SID79, size = BIR74),
-          show.legend = "point", inherit.aes = FALSE) +
-    geom_sf_text(aes(label = NAME), colour = "white") +
-  coord_sf(datum = NA) +
-  theme_minimal()
+
+transfers %>% group_by(below_50) %>% summarise(sum = sum(transfers))
+
+transfer_map <- map_plot(fac_geo_ats, transfers,
+                         title = "Total transfers to ATS",
+                         subtitle = "Fourty three percent of transfers are from South Arlington")
+
+ggsave(file.path(imagepath, "ATS_transfer_map.pdf"),
+       plot = transfer_map,
+       height = 11.5,
+       width = 8,
+       useDingbats = FALSE,
+       scale = 1.33)
+
