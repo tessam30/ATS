@@ -49,25 +49,31 @@ ggmap(arl) + geom_sf(data = fac_geo %>%
   coord_sf(datum = NA) +
   theme_minimal()
 
+
+map_plot <- function(df, xvar, title = "", subtitle = "") {
 ggplot(fac_geo_ats %>% filter(elem_flag == 1)) +
   annotation_map_tile(zoom = 13) +
   geom_sf(data = fac_geo_ats %>% 
-            filter(elem_flag == 1), aes(size = transfers, colour = transfers),
+            filter(elem_flag == 1), aes(size = {{xvar}}, colour = {{xvar}}),
           inherit.aes = FALSE) +
-  geom_sf_label(data = fac_geo_ats %>% filter(transfers > 1),
+  geom_sf_label(data = fac_geo_ats %>% filter({{xvar}} > 1),
                 aes(label = School), alpha = 0.25, vjust = 2.5) +
-  geom_sf_text(aes(label = transfers), colour = "white") +
-  geom_sf(data = fac_geo_ats %>% filter(transfers == 0),
+  geom_sf_text(aes(label = {{xvar}}), colour = "white") +
+  geom_sf(data = fac_geo_ats %>% filter({{xvar}} == 0),
           aes(fill = school_name)) +
-  geom_sf_label(data = fac_geo_ats %>% filter(transfers == 0),
+  geom_sf_label(data = fac_geo_ats %>% filter({{xvar}} == 0),
                   aes(label = School), alpha = 0.25, vjust = 1.25) +
   coord_sf(datum = NA) +
   theme_minimal() +
   scale_color_viridis_c(option = "A", direction = -1) +
   scale_size(range = c(0, 20)) + theme(legend.position = "none") +
   labs(x = "", y = "",
-       title = "Arlington Traditional School transfer numbers",
-       subtitle = "Fourty-three percent (228/525) of transfers are from South Arlington") 
+       title = str_c("Arlington Traditional School ", {{title}}),
+       subtitle = str_c({{subtitle}}, " somthing goes here")) 
+
+}  
+
+map_plot(fac_geo_ats, bus_count, title = "bus count summary")
 
 ggsave(file.path(imagepath, "ATS_transfer_map.pdf"),
        plot = last_plot(),

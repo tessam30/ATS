@@ -68,25 +68,3 @@ demog_plot(cr %>% filter(demographic == "White"), xvar = Total) +
        caption = "Civil Rights Statistics by School as of October 31, 2018")
 
 
-# Free and reduced meals --------------------------------------------------
-
-frm <- read_excel(file.path(datapath, "Civil Rights_Free Reduced Meal Stats 2018.xlsx"), 
-                  sheet = "Free-Reduced Meal", skip = 3) %>% 
-  select(school = `...1`,
-         frm_tally = `No.`,
-         tot_students = `Total Students*`) %>% 
-  mutate(frm_share = frm_tally / tot_students,
-         ats_flag = ifelse(school == "Arlington Traditional", ats_color, non_ats))
-
-frm %>% 
-  mutate(school_order = fct_reorder(school, frm_share)) %>% 
-  ggplot(aes(x = school_order, y = frm_share, fill = ats_flag)) + geom_col() +
-  coord_flip() +
-  scale_fill_identity() +
-  scale_color_identity() +
-  theme_minimal() +
-  scale_y_continuous(labels = percent_format(accuracy = 1)) +
-  #geom_text(aes(label = round(frm_share, 2), hjust = 1.25, colour = "#ffffff")) +
-  labs(x = "", y = "", 
-       title = "Percent of students receiving free or reduced meals",
-       caption = "Source: Civil Rights_Free Reduced Meal Stats 2018")
