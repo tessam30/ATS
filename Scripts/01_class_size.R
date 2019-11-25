@@ -53,7 +53,8 @@ class_size_plot <-
   theme_minimal() +
   scale_fill_identity() +
   labs(y = "", x = "Average class size",
-       title = "ATS class size is above the APS average for all grades K - 5th") +
+       title = "ATS class size (in blue) is above the APS average (in black) for all grades K - 5th",
+       subtitle = "Grey lines indicate minimum and maximum class size") +
   theme(axis.text = element_text(size = 8),
         panel.grid.major.y = element_blank(),
         strip.text = element_text(hjust = 0, size = 12)) 
