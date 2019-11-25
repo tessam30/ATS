@@ -31,13 +31,6 @@ proposal_names <- c("PU", "students_now", "current_school", "school_type",
 names(proposal) <- set_names(proposal_names)
 
 
-#helper function to shorten the group_by calls
-group_count <- function(df, x) {
-  df %>% 
-    group_by({{x}}) %>% 
-    mutate()
-}
-
 # Calculate the total counts for each school under different scenarios
 proposal_counts <- 
   proposal %>% 
@@ -50,23 +43,6 @@ proposal_counts <-
   group_by(proposal, school) %>% 
   summarise(count = sum(students_now)) %>% 
   spread(proposal, count)
-  
-  
-  
-  
-  
-  proposal %>% 
-  group_by(current_school) %>% 
-  mutate(cs_count = sum(students_now, na.rm = TRUE)) %>% 
-  ungroup() %>% 
-  group_by(nbhd_school) %>% 
-  mutate(nbhd_count = sum(students_now, na.rm = TRUE)) %>% 
-  ungroup()
-
-
-
-
-
 
 # Explore the spatial patterns of student density -------------------------
 
