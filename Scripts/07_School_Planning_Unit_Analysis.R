@@ -50,7 +50,7 @@ spu_pc <- spu %>%
   left_join(., plan_count, by = c("PU" = "PU")) 
 
 spu_proposal <- spu %>% 
-  right_join(., proposal)
+  left_join(., proposal)
 
 
 ggplot() +
@@ -72,14 +72,14 @@ proposal_map <- function(df, x = students_now, ...) {
     scale_fill_viridis_c(option = "A", direction = -1)
 }
 
-proposal_map(spu_proposal %>% filter(current_school == "ATS"), students_now, nbhd_school_p1)
+proposal_map(spu_proposal %>% filter(current_school == "ATS"), students_now, current_school)
 
 
 ggplot() + 
   geom_sf(data = spu, aes(fill = PU), fill = "#f0f0f0", colour = "white", size = 0.25) +
   geom_sf(data = spu_proposal %>% filter(school_type == "Option"), aes(fill = students_now),
           colour = "white") +
-  facet_wrap(school_type ~ current_school) +
+  facet_wrap(school_type ~ current_school, nrow = 2) +
   map_theme +
   scale_fill_viridis_c(option = "A", direction = -1) +
   labs(x = "", y = "", title = "Number of ATS students for 2019-2020 by planning unit",
@@ -87,6 +87,8 @@ ggplot() +
        caption = "Source: Planning Unit Level Data 2019-11-22 & APS School Planning Units",
        fill = "Students per planning unit") +
   theme(legend.position = "top")
+
+
 
 ggsave(file.path(imagepath, "ATS Students per student planning unit by current school.pdf"),
        plot = last_plot(),
@@ -97,6 +99,10 @@ ggsave(file.path(imagepath, "ATS Students per student planning unit by current s
        useDingbats = FALSE)
 
 
+# Write the proposal data out to reconstruct the 
+st_write(spu_proposal, file.path(gispath, "APS_proposal.shp"), delete_layer = TRUE)
 
-
-
+# Dissolve planning units into current school boundaries ------------------
+# Better solution is to use on ArcMap
+aps_boundaries <- spu_proposal %>% group_by(nbhd_school) %>% summarise(students = sum(students_now))
+ggplot(aps_boundaries) + geom_sf()
