@@ -125,6 +125,10 @@ district_maps$plots[[1]]
 
 
 
+
+
+
+
 ggplot() +
   geom_sf(data = spu, aes(fill = PU), fill = "#f0f0f0", colour = "white", size = 0.25) +
   geom_sf(data = spu_pc, aes(fill = students)) +
