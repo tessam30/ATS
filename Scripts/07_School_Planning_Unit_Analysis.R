@@ -4,7 +4,8 @@
 # Notes:
 
 
-
+library(patchwork)
+library(tidylog)
 
 # Load GIS data -----------------------------------------------------------
 # Background info on data: https://www.apsva.us/facilities-planning/find-your-planning-unit/
@@ -21,9 +22,29 @@ aps_schools <- st_read(file.path(gispath, "Facility_Points", "Facility_Points.sh
 spu <- st_read(file.path(gispath, "School_Planning_Units_2017", "School_Planning_Units_2017.shp"))
 spu %>% mutate(check = PU_T == PU) %>% count(check) # PU_T and PU contain the same info
 
+
+# Arlington public school boundaries reconstructed from planning data
 aps_boundaries <- st_read(file.path(gispath, "APS_school_boundaries_reconstructed.shp"))
 
 
+# Census boundaries and poverty data from Arlington Housing Report 
+census <- st_read(file.path(gispath, "tl_2019_51_tract"), stringsAsFactors = FALSE) %>% 
+  filter(COUNTYFP == "013")
+
+pov <- read_csv(file.path(datapath, "Arlington_housing_report_census_poverty.csv")) %>% 
+  gather(year, poverty, `2012`:`2016`) %>% 
+  mutate(county_poverty = ifelse(`Census Tract` == "County Poverty Rate", poverty, NA_integer_),
+         year = as.numeric(year)) %>% 
+  fill(county_poverty, .direction = c("up")) %>% 
+  filter(`Census Tract` != "County Poverty Rate")
+
+census_pov <- 
+  census %>% 
+  left_join(., pov, by = c("NAME" = "Census Tract"))
+
+
+
+# Planning unit level excel data provided by school board -----------------
 
 excel_sheets(file.path(datapath, "Planning-Unit-Level-Data_Nov_22_2019-1.xlsx"))
 plan_count <- read_excel(file.path(datapath, "Planning-Unit-Level-Data_Nov_22_2019-1.xlsx"), 
@@ -62,7 +83,7 @@ spu_pc <- spu %>%
   left_join(., plan_count, by = c("PU" = "PU")) 
 
 spu_proposal <- spu %>% 
-  left_join(., proposal)
+  left_join(., proposal) 
 
 
 
@@ -96,17 +117,21 @@ ggsave(file.path(imagepath, "ATS Students per student planning.pdf"),
 map_district <- function(df, x) {
   df %>% 
     ggplot() +
-    geom_sf(aes(fill = {{x}}), alpha = 0.8) +
+    geom_sf(aes(fill = {{x}}), alpha = 1, size = 0) +
     scale_fill_viridis_c(option = "A", direction = -1, end = .9)  +
+    theme_minimal() +
     theme(legend.position = "top",
           axis.text = element_blank()) +
-    geom_sf_text(aes(label = {{x}}), colour = "#f9f9f9") +
-    labs(x = "", y = "")
+    geom_sf_text(aes(label = {{x}}), colour = "#f9f9f9", size = 2.5) +
+    labs(x = "", y = "") 
 }
 
+
+map_district(spu_proposal %>% filter(nbhd_school_rbs %in% c("Barcroft", "Ashlawn")), PU) + facet_wrap(~nbhd_school_rbs)
 # At a more granular level you can split it out by the school districts
 # This will query any of the school districts 
-district_maps <- 
+
+nbh <- 
   spu_proposal %>% 
   group_by(PU) %>% 
   mutate(students = sum(students_now, na.rm = TRUE)) %>% 
@@ -114,19 +139,81 @@ district_maps <-
   group_by(nbhd_school) %>%
   mutate(total_students = sum(students_now, na.rm = TRUE)) %>% 
   ungroup() %>% 
+  arrange(nbhd_school) %>% 
   group_by(nbhd_school) %>%
   nest() %>% 
   mutate(plots = map2(data, nbhd_school, ~map_district(., students) +
-                       geom_sf(data = aps_boundaries %>% filter(nbhd_school %in% data$nbhd_sc), alpha = 0.25) +
-                        labs(title = str_c(nbhd_school))))
+                        geom_sf(data = aps_boundaries %>% filter(nbhd_school %in% data$nbhd_sc), alpha = 0.25) +
+                        geom_sf(data = aps_boundaries, colour = "#252525", fill = "", size = 0.5) + 
+                        labs(title = str_c(nbhd_school, " Current Neighborhood School"))))
 
-district_maps$plots[[1]]
+rbs <- 
+  spu_proposal %>% 
+  group_by(PU) %>% 
+  mutate(students = sum(students_now, na.rm = TRUE)) %>% 
+  ungroup() %>% 
+  group_by(nbhd_school_rbs) %>%
+  mutate(total_students = sum(students_now, na.rm = TRUE)) %>% 
+  ungroup() %>% 
+  arrange(nbhd_school_rbs) %>% 
+  group_by(nbhd_school_rbs) %>%
+  nest() %>% 
+  mutate(plots = map2(data, nbhd_school_rbs, ~map_district(., students) +
+                        geom_sf(data = aps_boundaries %>% filter(nbhd_school_rbs %in% data$nbhd_sc), alpha = 0.25) +
+                        geom_sf(data = aps_boundaries, colour = "#252525", fill = "", size = 0.5) + 
+                        labs(title = str_c(nbhd_school_rbs, " Representative Boundary Scenario 1"))))
+
+p1 <- 
+  spu_proposal %>% 
+  group_by(PU) %>% 
+  mutate(students = sum(students_now, na.rm = TRUE)) %>% 
+  ungroup() %>% 
+  group_by(nbhd_school_p1) %>%
+  mutate(total_students = sum(students_now, na.rm = TRUE)) %>% 
+  ungroup() %>% 
+  arrange(nbhd_school_p1) %>% 
+  group_by(nbhd_school_p1) %>%
+  nest() %>% 
+  mutate(plots = map2(data, nbhd_school_p1, ~map_district(., students) +
+                       geom_sf(data = aps_boundaries %>% filter(nbhd_school_p1 %in% data$nbhd_sc), alpha = 0.25) +
+                        geom_sf(data = aps_boundaries, colour = "#252525", fill = "", size = 0.5) + 
+                        labs(title = str_c(nbhd_school_p1, " Proposal 1"))))
+
+p2 <- 
+  spu_proposal %>% 
+  group_by(PU) %>% 
+  mutate(students = sum(students_now, na.rm = TRUE)) %>% 
+  ungroup() %>% 
+  group_by(nbhd_school_p2) %>%
+  mutate(total_students = sum(students_now, na.rm = TRUE)) %>% 
+  ungroup() %>% 
+  arrange(nbhd_school_p2) %>% 
+  group_by(nbhd_school_p2) %>%
+  nest() %>% 
+  mutate(plots = map2(data, nbhd_school_p2, ~map_district(., students) +
+                        geom_sf(data = aps_boundaries %>% filter(nbhd_school_p2 %in% data$nbhd_sc), alpha = 0.25) +
+                        geom_sf(data = aps_boundaries, colour = "#252525", fill = "", size = 0.5) + 
+                        labs(title = str_c(nbhd_school_p2, " Proposal 2"))))
+
+
+nbh$nbhd_school
+rbs$nbhd_school_rbs 
+p1$nbhd_school_p1
+p2$nbhd_school_p2
+
+pn = 1
+(nbh$plots[[pn]] | rbs$plots[[pn]]) / (p1$plots[[pn]] | p2$plots[[pn]]) +
+  ggsave(file.path(imagepath, "Comparing Arlington Fleet.pdf"),
+         height = 16,
+         width = 17,
+         units = c("in"),
+         useDingbats = FALSE)
+
+rbs$plots[[4]] + rbs$plots[[5]]
 
 
 
-
-
-
+# Summary of all the schools ----------------------------------------------
 
 
 ggplot() +
@@ -166,9 +253,6 @@ ggplot() +
   map_format
 
 
-
-
-
 ggsave(file.path(imagepath, "ATS Students per student planning unit by current school.pdf"),
        plot = last_plot(),
        height = 17,
@@ -201,6 +285,19 @@ ggsave(file.path(imagepath, "APS_school_boundaries_with_student_counts.pdf"),
        width = 8.5,
        useDingbats = FALSE,
        dpi = "retina")
+
+
+
+# Census poverty maps -----------------------------------------------------
+
+census_pov %>% 
+  ggplot() + 
+  geom_sf(aes(fill = poverty)) + 
+  geom_sf_text(aes(label = scales::percent(poverty)), colour = "#f9f9f9", size = 2.5) +
+  facet_wrap(~year) + 
+  map_format +
+  scale_fill_viridis_c(option = "E", direction = -1, alpha = 0.90, end = .90) 
+
 
 
 
